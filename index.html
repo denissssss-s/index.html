@@ -2,39 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Hand Particles</title>
+    <title>3D Particle Morph</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; color: white; font-family: sans-serif; }
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: rgba(0,0,0,0.85); z-index: 100;
+            background: #000; z-index: 100;
         }
         button {
-            padding: 15px 35px; font-size: 1.2rem; cursor: pointer;
-            background: #00d2ff; color: black; border: none; border-radius: 50px; font-weight: bold;
+            padding: 15px 40px; font-size: 1.2rem; cursor: pointer;
+            background: #00d2ff; color: #000; border: none; border-radius: 50px; font-weight: bold;
         }
-        #info { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
-        canvas { display: block; }
-        video { display: none; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1>Hand Gesture Particles</h1>
-        <p>Click the button to allow camera access</p>
-        <button id="startBtn">START EXPERIENCE</button>
+        <h1>Hand Gesture Control</h1>
+        <button id="startBtn">START CAMERA</button>
+        <p>Allow camera access when prompted</p>
     </div>
 
-    <div id="info">
-        <b>Controls:</b><br>
-        🖐️ Move: Controls Position<br>
-        🤏 Pinch: Scale Particles<br>
-        ☝️ Index Finger Up: Morph Shape
-    </div>
-
-    <video id="webcam" autoplay playsinline></video>
+    <video id="webcam" autoplay playsinline style="display:none"></video>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -47,10 +37,10 @@
 
         document.getElementById('startBtn').onclick = () => {
             document.getElementById('overlay').style.display = 'none';
-            init();
+            startApp();
         };
 
-        function init() {
+        function startApp() {
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -58,10 +48,10 @@
             document.body.appendChild(renderer.domElement);
             camera.position.z = 8;
 
-            // Generate 3 Shapes: Sphere, Heart, Saturn
-            const count = 8000;
+            // Shape Data
+            const count = 10000;
             const geo = new THREE.BufferGeometry();
-            const shapes = { sphere: new Float32Array(count * 3), heart: new Float32Array(count * 3), saturn: new Float32Array(count * 3) };
+            const shapes = { sphere: new Float32Array(count * 3), heart: new Float32Array(count * 3) };
 
             for (let i = 0; i < count; i++) {
                 const i3 = i * 3;
@@ -77,19 +67,6 @@
                 shapes.heart[i3] = 0.2 * (16 * Math.pow(Math.sin(t), 3));
                 shapes.heart[i3+1] = 0.2 * (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
                 shapes.heart[i3+2] = (Math.random() - 0.5) * 2;
-
-                // Saturn
-                if (i < count * 0.6) {
-                    const st = Math.random() * Math.PI * 2, sp = Math.random() * Math.PI;
-                    shapes.saturn[i3] = 2.5 * Math.sin(sp) * Math.cos(st);
-                    shapes.saturn[i3+1] = 2.5 * Math.sin(sp) * Math.sin(st);
-                    shapes.saturn[i3+2] = 2.5 * Math.cos(sp);
-                } else {
-                    const r = 3.5 + Math.random() * 2, rt = Math.random() * Math.PI * 2;
-                    shapes.saturn[i3] = r * Math.cos(rt);
-                    shapes.saturn[i3+1] = r * Math.sin(rt) * 0.2; 
-                    shapes.saturn[i3+2] = r * Math.sin(rt);
-                }
             }
 
             geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(shapes.sphere), 3));
@@ -101,13 +78,11 @@
             const points = new THREE.Points(geo, mat);
             scene.add(points);
 
-            let currentKey = 'sphere';
-            const keys = Object.keys(shapes);
+            let currentTarget = 'sphere';
 
-            // Hand Tracking
             const video = document.getElementById('webcam');
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+            hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.5 });
 
             hands.onResults((res) => {
                 if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
@@ -118,10 +93,8 @@
                     const dist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
                     points.scale.setScalar(dist * 6 + 0.5);
 
-                    // If index finger is high, change shape
-                    if (lm[8].y < lm[5].y - 0.2) {
-                        currentKey = keys[(keys.indexOf(currentKey) + 1) % keys.length];
-                    }
+                    if (lm[8].y < lm[5].y - 0.2) currentTarget = 'heart';
+                    else currentTarget = 'sphere';
                 }
             });
 
@@ -133,7 +106,7 @@
             function animate() {
                 requestAnimationFrame(animate);
                 const pos = geo.attributes.position;
-                const target = shapes[currentKey];
+                const target = shapes[currentTarget];
                 for (let i = 0; i < count * 3; i++) {
                     pos.array[i] += (target[i] - pos.array[i]) * 0.1;
                 }
