@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand-Controlled Particle Morph</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; z-index: 10; }
+        canvas { display: block; }
+        video { display: none; } /* Hide the raw webcam feed */
+    </style>
+</head>
+<body>
+    <div id="info">
+        Hand Gesture Control: <br>
+        - Move hand to move particles <br>
+        - Pinch fingers to expand/contract <br>
+        - Rotate hand to spin the system
+    </div>
+    <video id="webcam" autoplay playsinline></video>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Configuration ---
+        const PARTICLE_COUNT = 5000;
+        let currentShapeIndex = 0;
+        let morphTarget = 0;
+
+        // --- Setup Three.js Scene ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        camera.position.z = 5;
+
+        // --- Generate Shapes (Buffer Data) ---
+        function createGeometry() {
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+            const colors = new Float32Array(PARTICLE_COUNT * 3);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                // Sphere (Default Shape)
+                const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+                const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+                
+                positions[i * 3] = Math.cos(theta) * Math.sin(phi) * 2;
+                positions[i * 3 + 1] = Math.sin
