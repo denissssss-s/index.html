@@ -14,6 +14,7 @@
             padding: 15px 40px; font-size: 1.2rem; cursor: pointer;
             background: #00d2ff; color: #000; border: none; border-radius: 50px; font-weight: bold;
         }
+        #status { margin-top: 15px; color: #888; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -21,7 +22,7 @@
     <div id="overlay">
         <h1>Hand Gesture Control</h1>
         <button id="startBtn">START CAMERA</button>
-        <p>Allow camera access when prompted</p>
+        <div id="status">Waiting for user...</div>
     </div>
 
     <video id="webcam" autoplay playsinline style="display:none"></video>
@@ -35,12 +36,22 @@
     <script type="module">
         import * as THREE from 'three';
 
-        document.getElementById('startBtn').onclick = () => {
-            document.getElementById('overlay').style.display = 'none';
-            startApp();
+        const startBtn = document.getElementById('startBtn');
+        const status = document.getElementById('status');
+
+        startBtn.onclick = async () => {
+            status.innerText = "Initializing AI...";
+            try {
+                await startApp();
+                document.getElementById('overlay').style.display = 'none';
+            } catch (err) {
+                alert("Camera Error: " + err.message);
+                status.innerText = "Error: " + err.message;
+            }
         };
 
-        function startApp() {
+        async function startApp() {
+            const video = document.getElementById('webcam');
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -49,20 +60,18 @@
             camera.position.z = 8;
 
             // Shape Data
-            const count = 10000;
+            const count = 8000;
             const geo = new THREE.BufferGeometry();
             const shapes = { sphere: new Float32Array(count * 3), heart: new Float32Array(count * 3) };
 
             for (let i = 0; i < count; i++) {
                 const i3 = i * 3;
-                // Sphere
                 const u = Math.random(), v = Math.random();
                 const theta = 2 * Math.PI * u, phi = Math.acos(2 * v - 1);
                 shapes.sphere[i3] = 3 * Math.sin(phi) * Math.cos(theta);
                 shapes.sphere[i3+1] = 3 * Math.sin(phi) * Math.sin(theta);
                 shapes.sphere[i3+2] = 3 * Math.cos(phi);
 
-                // Heart
                 const t = Math.random() * Math.PI * 2;
                 shapes.heart[i3] = 0.2 * (16 * Math.pow(Math.sin(t), 3));
                 shapes.heart[i3+1] = 0.2 * (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
@@ -80,42 +89,33 @@
 
             let currentTarget = 'sphere';
 
-            const video = document.getElementById('webcam');
+            // Setup MediaPipe Hands
             const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.5 });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
 
             hands.onResults((res) => {
                 if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
                     const lm = res.multiHandLandmarks[0];
                     points.position.x = (lm[9].x - 0.5) * -15;
                     points.position.y = (lm[9].y - 0.5) * -10;
-                    
                     const dist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
                     points.scale.setScalar(dist * 6 + 0.5);
-
-                    if (lm[8].y < lm[5].y - 0.2) currentTarget = 'heart';
-                    else currentTarget = 'sphere';
+                    currentTarget = (lm[8].y < lm[5].y - 0.2) ? 'heart' : 'sphere';
                 }
             });
 
-            new Camera(video, {
+            // Start Camera with better error handling
+            const cam = new Camera(video, {
                 onFrame: async () => { await hands.send({image: video}); },
                 width: 640, height: 480
-            }).start();
-
-            function animate() {
-                requestAnimationFrame(animate);
-                const pos = geo.attributes.position;
-                const target = shapes[currentTarget];
-                for (let i = 0; i < count * 3; i++) {
-                    pos.array[i] += (target[i] - pos.array[i]) * 0.1;
-                }
-                pos.needsUpdate = true;
-                points.rotation.y += 0.01;
-                renderer.render(scene, camera);
-            }
-            animate();
+            });
+            
+            return cam.start();
         }
+
+        window.addEventListener('resize', () => {
+            location.reload(); // Quickest fix for aspect ratio changes
+        });
     </script>
 </body>
 </html>
